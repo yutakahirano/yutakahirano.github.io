@@ -1,0 +1,164 @@
+<!doctype html>
+<html>
+<table>
+<thead>
+<td>Response.prototype.text</td>
+<td>Response.prototype.body + pipeTo + TextDecoderStream</td>
+<td>Response.prototype.arrayBuffer + TextDecoder</td>
+<td>TextDecoder only</td>
+<td>Reading Response body</td>
+<tbody id="results">
+</thead>
+</table>
+
+<style>
+td {
+  border: 1px solid;
+}
+</style>
+<script>
+
+const url = 'https://raw.githubusercontent.com/aozorabunko/aozorabunko/master/cards/000148/files/789_14547.html'
+const N = 20;
+const encoding = 'shift-jis';
+
+async function warmup() {
+  for (let i = 0; i < 5; ++i) {
+    const resp = await fetch(url);
+    const text = resp.text();
+  }
+  for (let i = 0; i < 5; ++i) {
+    const resp = await fetch(url);
+    const reader = resp.body.getReader();
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) {
+        break;
+      }
+    }
+  }
+}
+
+async function native() {
+  const results = [];
+  for (let i = 0; i < N; ++i) {
+    const resp = await fetch(url);
+    const start = Date.now();
+    const text = await resp.text();
+    const duration = Date.now() - start;
+    results.push(duration);
+  } 
+  return results;
+}
+
+async function streams() {
+  const results = [];
+  for (let i = 0; i < N; ++i) {
+    const resp = await fetch(url);
+    const start = Date.now();
+    let text = '';
+
+    const textStream = resp.body.pipeThrough(new TextDecoderStream(encoding));
+    const reader = textStream.getReader();
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) {
+        break;
+      }
+      text += value;
+    }
+    const duration = Date.now() - start;
+    results.push(duration);
+  } 
+  return results;
+}
+
+async function arrayBuffer() {
+  const results = [];
+  for (let i = 0; i < N; ++i) {
+    const resp = await fetch(url);
+    const start = Date.now();
+    const arrayBuffer = await resp.arrayBuffer();
+    const decoder = new TextDecoder(encoding);
+    const text = decoder.decode(arrayBuffer);
+    const duration = Date.now() - start;
+    results.push(duration);
+  } 
+  return results;
+}
+
+async function decodeOnly() {
+  const results = [];
+  for (let i = 0; i < N; ++i) {
+    const resp = await fetch(url);
+    const arrayBuffer = await resp.arrayBuffer();
+    const start = Date.now();
+    const decoder = new TextDecoder(encoding);
+    const text = decoder.decode(arrayBuffer);
+    const duration = Date.now() - start;
+    results.push(duration);
+  } 
+  return results;
+}
+
+async function readBody() {
+  const results = [];
+  for (let i = 0; i < N; ++i) {
+    const resp = await fetch(url);
+    const reader = resp.body.getReader();
+    const start = Date.now();
+    const decoder = new TextDecoder(encoding);
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) {
+        break;
+      }
+    }
+    const duration = Date.now() - start;
+    results.push(duration);
+  } 
+  return results;
+}
+
+async function run() {
+  await warmup();
+
+  const resultsNative = await native();
+  const resultsStreams = await streams();
+  const resultsArrayBuffer = await arrayBuffer();
+  const resultsDecodeOnly = await decodeOnly();
+  const resultsReadBody = await readBody();
+
+  const el = document.querySelector('#results');
+  
+  for (let i = 0; i < N; ++i) {
+    const tr = document.createElement('tr');
+
+    let td;
+    td = document.createElement('td');
+    td.textContent = resultsNative[i];
+    tr.appendChild(td);
+
+    td = document.createElement('td');
+    td.textContent = resultsStreams[i];
+    tr.appendChild(td);
+
+    td = document.createElement('td');
+    td.textContent = resultsArrayBuffer[i];
+    tr.appendChild(td);
+
+    td = document.createElement('td');
+    td.textContent = resultsDecodeOnly[i];
+    tr.appendChild(td);
+
+    td = document.createElement('td');
+    td.textContent = resultsReadBody[i];
+    tr.appendChild(td);
+
+    el.appendChild(tr);
+  }
+}
+
+run();
+
+</script>
